@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Gateway SDK Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .demo-card {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 500px;
+      width: 100%;
+    }
+    h1 {
+      margin: 0 0 8px;
+      color: #1a202c;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #718096;
+      margin: 0 0 32px;
+    }
+    .product {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      background: #f7fafc;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .product-icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+    }
+    .product-info h3 {
+      margin: 0 0 4px;
+      color: #1a202c;
+    }
+    .product-price {
+      color: #667eea;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: translateY(-2px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .log {
+      margin-top: 24px;
+      padding: 16px;
+      background: #1a202c;
+      color: #48bb78;
+      border-radius: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+    .log.visible {
+      display: block;
+    }
+    .log-line {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-card">
+    <h1>🎮 Premium Game Pass</h1>
+    <p class="subtitle">SDK Integration Demo</p>
+    
+    <div class="product">
+      <div class="product-icon">🎯</div>
+      <div class="product-info">
+        <h3>Annual Subscription</h3>
+        <div class="product-price">₹500.00</div>
+      </div>
+    </div>
+    
+    <button id="pay-button">Pay with Gateway SDK</button>
+    
+    <div id="log" class="log">
+      <div class="log-line">Ready to process payment...</div>
+    </div>
+  </div>
+
+  <!-- Load Payment Gateway SDK -->
+  <script src="http://localhost:3001/checkout.js"></script>
+  
+  <script>
+    const logEl = document.getElementById('log');
+    const payBtn = document.getElementById('pay-button');
+    
+    function log(message, color = '#48bb78') {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.style.color = color;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      logEl.classList.add('visible');
+    }
+    
+    payBtn.addEventListener('click', function() {
+      log('🚀 Initializing Payment Gateway SDK...');
+      
+      try {
+        const checkout = new PaymentGateway({
+          key: 'key_test_abc123',
+          orderId: 'order_demo_' + Date.now(),
+          host: 'http://localhost:3001',
+          onSuccess: function(response) {
+            log('✅ Payment successful!', '#48bb78');
+            log('Payment ID: ' + response.paymentId, '#4299e1');
+            log('Order ID: ' + response.orderId, '#4299e1');
+            alert('Payment successful! Payment ID: ' + response.paymentId);
+          },
+          onFailure: function(error) {
+            log('❌ Payment failed!', '#f56565');
+            log('Error: ' + JSON.stringify(error), '#f56565');
+            alert('Payment failed: ' + (error.message || 'Unknown error'));
+          },
+          onClose: function() {
+            log('🔒 Payment modal closed', '#a0aec0');
+          }
+        });
+        
+        log('📱 Opening payment modal...', '#ecc94b');
+        checkout.open();
+      } catch (error) {
+        log('❌ SDK Error: ' + error.message, '#f56565');
+        alert('SDK Error: ' + error.message);
+      }
+    });
+    
+    log('✨ Demo page loaded successfully');
+    log('Click "Pay with Gateway SDK" to start');
+  </script>
+</body>
+</html>

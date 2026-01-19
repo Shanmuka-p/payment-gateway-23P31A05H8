@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Gateway SDK Demo</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --panel: #ffffff;
+      --border: #e5e7eb;
+      --text: #0b1224;
+      --muted: #4b5563;
+      --accent: #111827;
+      --accent-soft: #e5e7eb;
+      --shadow: 0 20px 60px rgba(0,0,0,0.08);
+    }
+    :root[data-theme="dark"] {
+      --bg: #0a0b0f;
+      --panel: #0f172a;
+      --border: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #e5e7eb;
+      --accent-soft: #1f2937;
+      --shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(17,24,39,0.05), transparent 30%), radial-gradient(circle at 80% 0%, rgba(17,24,39,0.05), transparent 25%), var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      color: var(--text);
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+    .demo-card {
+      background: var(--panel);
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+      max-width: 520px;
+      width: 100%;
+      border: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0 0 8px;
+      color: var(--text);
+      font-size: 28px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+    .toggle-btn {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.15s ease;
+    }
+    .toggle-btn:hover { transform: translateY(-1px); }
+    .product {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      background: var(--accent-soft);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+    .product-icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .product-icon svg { width: 28px; height: 28px; color: #fff; }
+    .product-info h3 {
+      margin: 0 0 4px;
+      color: var(--text);
+    }
+    .product-price {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      background: var(--text);
+      color: var(--bg);
+      border: 1px solid var(--text);
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover { transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
+    .log {
+      margin-top: 24px;
+      padding: 16px;
+      background: #0b1224;
+      color: #cbd5e1;
+      border-radius: 12px;
+      font-family: 'Inter', 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 220px;
+      overflow-y: auto;
+      display: none;
+      border: 1px solid #111827;
+    }
+    :root[data-theme="dark"] .log { background: #0f172a; border-color: #1f2937; }
+    .log.visible { display: block; }
+    .log-line { margin: 4px 0; display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+    .dot.ok { background: #10b981; }
+    .dot.warn { background: #f59e0b; }
+    .dot.err { background: #ef4444; }
+    .dot.info { background: #3b82f6; }
+    @media (max-width: 600px) {
+      .demo-card { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-card">
+    <div class="toolbar">
+      <button id="theme-toggle" class="toggle-btn" type="button">
+        <span id="theme-icon" aria-hidden="true"></span>
+        <span id="theme-label">Light</span>
+      </button>
+    </div>
+    <h1>Premium Game Pass</h1>
+    <p class="subtitle">SDK Integration Demo</p>
+    
+    <div class="product">
+      <div class="product-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M10 10h4m-2-2v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="7" cy="12" r="1" fill="currentColor"/>
+          <circle cx="17" cy="12" r="1" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="product-info">
+        <h3>Annual Subscription</h3>
+        <div class="product-price">₹500.00</div>
+      </div>
+    </div>
+    
+    <button id="pay-button">Pay with Gateway SDK</button>
+    
+    <div id="log" class="log">
+      <div class="log-line"><span class="dot info"></span><span>Ready to process payment...</span></div>
+    </div>
+  </div>
+
+  <!-- Load Payment Gateway SDK bundle from dist -->
+  <script src="/dist/checkout.js"></script>
+  
+  <script>
+    const logEl = document.getElementById('log');
+    const payBtn = document.getElementById('pay-button');
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const themeLabel = document.getElementById('theme-label');
+
+    const sunSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v2M12 19v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M3 12h2M19 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    const moonSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12.79A9 9 0 0 1 11.21 3 7 7 0 1 0 21 12.79Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    const preferred = localStorage.getItem('pg-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(preferred);
+    
+    function setTheme(mode) {
+      const theme = mode === 'dark' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('pg-theme', theme);
+      themeIcon.innerHTML = theme === 'dark' ? moonSvg : sunSvg;
+      themeLabel.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    }
+
+    themeToggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      setTheme(current === 'light' ? 'dark' : 'light');
+    });
+
+    function log(message, tone = 'info') {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      const dot = document.createElement('span');
+      dot.className = `dot ${tone}`;
+      const text = document.createElement('span');
+      text.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      line.appendChild(dot);
+      line.appendChild(text);
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      logEl.classList.add('visible');
+    }
+    
+    payBtn.addEventListener('click', function() {
+      log('Initializing Payment Gateway SDK...', 'info');
+      
+      try {
+        const checkout = new PaymentGateway({
+          key: 'key_test_abc123',
+          orderId: 'order_demo_' + Date.now(),
+          host: 'http://localhost:3001',
+          theme: document.documentElement.getAttribute('data-theme') || 'light',
+          onSuccess: function(response) {
+            log('Payment successful!', 'ok');
+            log('Payment ID: ' + response.paymentId, 'info');
+            log('Order ID: ' + response.orderId, 'info');
+            alert('Payment successful! Payment ID: ' + response.paymentId);
+          },
+          onFailure: function(error) {
+            log('Payment failed!', 'err');
+            log('Error: ' + JSON.stringify(error), 'err');
+            alert('Payment failed: ' + (error.message || 'Unknown error'));
+          },
+          onClose: function() {
+            log('Payment modal closed', 'warn');
+          }
+        });
+        
+        log('Opening payment modal...', 'info');
+        checkout.open();
+      } catch (error) {
+        log('SDK Error: ' + error.message, 'err');
+        alert('SDK Error: ' + error.message);
+      }
+    });
+
+    log('Demo page loaded successfully', 'info');
+    log('Click "Pay with Gateway SDK" to start', 'info');
+  </script>
+</body>
+</html>

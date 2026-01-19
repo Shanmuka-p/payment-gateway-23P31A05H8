@@ -1,0 +1,25 @@
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+
+# Backend
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+
+# Frontend
+node_modules/
+dist/
+build/
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+.docker/

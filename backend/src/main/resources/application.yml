@@ -1,0 +1,37 @@
+server:
+  port: 8000
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/payment_gateway}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:vinay2122@}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: 6379
+
+app:
+  test-mode: ${TEST_MODE:false}
+  test-processing-delay: ${TEST_PROCESSING_DELAY:1000}
+  test-payment-success: ${TEST_PAYMENT_SUCCESS:true}
+  webhook-retry-intervals-test: ${WEBHOOK_RETRY_INTERVALS_TEST:false}
+  worker:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

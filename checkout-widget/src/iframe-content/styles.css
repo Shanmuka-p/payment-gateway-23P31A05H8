@@ -1,0 +1,117 @@
+:root {
+  --pg-bg: #f7f7f8;
+  --pg-panel: #ffffff;
+  --pg-border: #e5e7eb;
+  --pg-text: #0b1224;
+  --pg-muted: #4b5563;
+  --pg-accent: #111827;
+  --pg-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+  --pg-radius: 14px;
+}
+
+:root[data-theme="dark"] {
+  --pg-bg: #0a0b0f;
+  --pg-panel: #0f172a;
+  --pg-border: #1f2937;
+  --pg-text: #e5e7eb;
+  --pg-muted: #9ca3af;
+  --pg-accent: #e5e7eb;
+  --pg-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--pg-bg);
+  color: var(--pg-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.pg-iframe-shell {
+  width: 100%;
+  max-width: 420px;
+  background: var(--pg-panel);
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  padding: 20px;
+  box-shadow: var(--pg-shadow);
+}
+
+.pg-iframe-shell h3 {
+  margin: 0 0 14px;
+  font-size: 20px;
+  color: var(--pg-text);
+}
+
+.pg-iframe-shell form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pg-iframe-shell label {
+  font-size: 14px;
+  color: var(--pg-muted);
+}
+
+.pg-iframe-shell input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+  color: var(--pg-text);
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pg-iframe-shell input:focus {
+  outline: none;
+  border-color: var(--pg-accent);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.pg-iframe-shell .error {
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.pg-iframe-shell .actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pg-iframe-shell button {
+  flex: 1;
+  min-width: 140px;
+  background: var(--pg-accent);
+  color: var(--pg-bg);
+  border: 1px solid var(--pg-accent);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pg-iframe-shell button.ghost {
+  background: transparent;
+  color: var(--pg-text);
+  border: 1px solid var(--pg-border);
+}
+
+.pg-iframe-shell button:hover { transform: translateY(-1px); }
+.pg-iframe-shell button:active { transform: translateY(0); }
+
+@media (max-width: 520px) {
+  body { padding: 16px; }
+  .pg-iframe-shell { padding: 16px; }
+  .pg-iframe-shell .actions { flex-direction: column; }
+  .pg-iframe-shell button { width: 100%; }
+}

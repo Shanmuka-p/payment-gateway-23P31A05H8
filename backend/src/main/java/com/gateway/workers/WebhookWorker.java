@@ -1,155 +1,186 @@
 package com.gateway.workers;
 
-import com.gateway.jobs.DeliverWebhookJob;
-import com.gateway.models.Merchant;
-import com.gateway.models.WebhookLog;
-import com.gateway.repositories.MerchantRepository;
-import com.gateway.repositories.WebhookLogRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gateway.model.Merchant;
+import com.gateway.model.WebhookLog;
+import com.gateway.queue.RedisQueueService;
+import com.gateway.repo.MerchantRepository;
+import com.gateway.repo.WebhookLogRepository;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
-@Service
+@Component
+@ConditionalOnProperty(name = "app.worker.enabled", havingValue = "true")
 public class WebhookWorker {
+    private static final Logger log = LoggerFactory.getLogger(WebhookWorker.class);
 
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-    @Autowired
-    private WebhookLogRepository webhookLogRepository;
-    @Autowired
-    private MerchantRepository merchantRepository;
+    private final RedisQueueService queueService;
+    private final WebhookLogRepository webhookLogRepository;
+    private final MerchantRepository merchantRepository;
+    private final ObjectMapper mapper;
+    private final RestTemplate restTemplate;
 
-    @Value("${WEBHOOK_RETRY_INTERVALS_TEST:false}")
-    private boolean useTestIntervals;
+    @Value("${app.webhook-retry-intervals-test:false}")
+    private boolean testIntervals;
 
-    private boolean active = true;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    public WebhookWorker(RedisQueueService queueService, WebhookLogRepository webhookLogRepository, MerchantRepository merchantRepository) {
+        this.queueService = queueService;
+        this.webhookLogRepository = webhookLogRepository;
+        this.merchantRepository = merchantRepository;
+        this.mapper = new ObjectMapper();
+        this.mapper.registerModule(new JavaTimeModule());
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(5000);
+        this.restTemplate = new RestTemplate(factory);
+    }
 
-    @Async
-    public void start() {
-        System.out.println("✅ Webhook Worker Started...");
-        while (active) {
+    @PostConstruct
+    public void init() {
+        queueService.setWorkerHeartbeat();
+        Thread workerThread = new Thread(() -> run(), "WebhookWorker");
+        workerThread.setDaemon(false);
+        workerThread.start();
+        log.info("WebhookWorker thread started");
+    }
+
+    public void run() {
+        while (true) {
             try {
-                DeliverWebhookJob job = (DeliverWebhookJob) redisTemplate.opsForList().rightPop("queue:webhooks", 5, TimeUnit.SECONDS);
-                if (job != null) {
-                    processWebhook(job);
-                }
+                queueService.setWorkerHeartbeat();
+                String payloadStr = queueService.blockingPop(RedisQueueService.QUEUE_DELIVER_WEBHOOK, Duration.ofSeconds(5));
+                if (payloadStr == null) continue;
+                queueService.incrProcessing();
+                Map<?, ?> payload = mapper.readValue(payloadStr, Map.class);
+                String webhookId = (String) payload.get("webhookId");
+                attemptDelivery(UUID.fromString(webhookId));
+                queueService.incrCompleted();
             } catch (Exception e) {
-                e.printStackTrace();
+                log.error("WebhookWorker error", e);
+                queueService.incrFailed();
+            } finally {
+                queueService.decrProcessing();
             }
         }
     }
 
-    private void processWebhook(DeliverWebhookJob job) {
-        WebhookLog log = webhookLogRepository.findById(job.getWebhookLogId()).orElse(null);
-        if (log == null || "success".equals(log.getStatus()) || "failed".equals(log.getStatus())) return;
-
-        // Check if it is time to retry
-        if (log.getNextRetryAt() != null && log.getNextRetryAt().isAfter(LocalDateTime.now())) {
-            // Not ready yet, push back to queue (or handling via scheduled task is better, but for simplicity:)
-            // In a real production system, we wouldn't pop it yet. 
-            // For this project, we rely on the RetryScheduler (which we will build next) to push it back.
-            return; 
+    @Scheduled(fixedDelay = 5000)
+    public void enqueueDueRetries() {
+        List<WebhookLog> due = webhookLogRepository.findByStatusAndNextRetryAtLessThanEqual("pending", OffsetDateTime.now());
+        for (WebhookLog log : due) {
+            Map<String, Object> job = Map.of("webhookId", log.getId().toString());
+            queueService.enqueue(RedisQueueService.QUEUE_DELIVER_WEBHOOK, job);
         }
+    }
 
-        Merchant merchant = merchantRepository.findById(log.getMerchantId()).orElse(null);
-        if (merchant == null || merchant.getWebhookUrl() == null) {
-            log.setStatus("failed"); // No URL to send to
-            webhookLogRepository.save(log);
+    private void attemptDelivery(UUID webhookId) {
+        Optional<WebhookLog> logOpt = webhookLogRepository.findById(webhookId);
+        if (logOpt.isEmpty()) return;
+        WebhookLog log = logOpt.get();
+        Optional<Merchant> merchantOpt = merchantRepository.findById(log.getMerchantId());
+        if (merchantOpt.isEmpty()) return;
+        Merchant merchant = merchantOpt.get();
+        if (merchant.getWebhookUrl() == null || merchant.getWebhookSecret() == null) {
+            markFailed(log, 0, "Webhook not configured");
             return;
         }
 
+        int attempts = log.getAttempts() + 1;
+        OffsetDateTime now = OffsetDateTime.now();
         try {
-            // 1. Generate Signature
-            String signature = generateHmac(log.getPayload(), merchant.getWebhookSecret());
-
-            // 2. Send Request
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(merchant.getWebhookUrl()))
-                    .header("Content-Type", "application/json")
-                    .header("X-Webhook-Signature", signature)
-                    .POST(HttpRequest.BodyPublishers.ofString(log.getPayload()))
-                    .timeout(java.time.Duration.ofSeconds(5))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            // 3. Handle Response
-            log.setLastAttemptAt(LocalDateTime.now());
-            log.setResponseCode(response.statusCode());
-            log.setResponseBody(response.body());
-
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            String signature = computeHmac(log.getPayload(), merchant.getWebhookSecret());
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("Content-Type", "application/json");
+            headers.add("X-Webhook-Signature", signature);
+            HttpEntity<String> entity = new HttpEntity<>(log.getPayload(), headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(merchant.getWebhookUrl(), entity, String.class);
+            int status = response.getStatusCode().value();
+            log.setAttempts(attempts);
+            log.setLastAttemptAt(now);
+            log.setResponseCode(status);
+            log.setResponseBody(response.getBody());
+            if (status >= 200 && status < 300) {
                 log.setStatus("success");
+                log.setNextRetryAt(null);
             } else {
-                handleFailure(log);
+                scheduleRetry(log, attempts, now);
             }
-        } catch (Exception e) {
-            log.setResponseBody("Error: " + e.getMessage());
-            handleFailure(log);
+        } catch (Exception ex) {
+            System.err.println("Webhook delivery error: " + ex.getMessage());
+            scheduleRetry(log, attempts, now);
         }
-        
         webhookLogRepository.save(log);
     }
 
-    private void handleFailure(WebhookLog log) {
-        int attempts = log.getAttempts() + 1;
-        log.setAttempts(attempts);
-
+    private void scheduleRetry(WebhookLog logEntity, int attempts, OffsetDateTime now) {
+        logEntity.setAttempts(attempts);
+        logEntity.setLastAttemptAt(now);
         if (attempts >= 5) {
-            log.setStatus("failed");
-        } else {
-            log.setStatus("pending");
-            log.setNextRetryAt(LocalDateTime.now().plusSeconds(getRetryDelay(attempts)));
+            logEntity.setStatus("failed");
+            logEntity.setNextRetryAt(null);
+            return;
         }
+        long nextSeconds = retryDelaySeconds(attempts);
+        logEntity.setStatus("pending");
+        logEntity.setNextRetryAt(now.plusSeconds(nextSeconds));
     }
 
-    private long getRetryDelay(int attempt) {
-        if (useTestIntervals) {
+    private long retryDelaySeconds(int attempt) {
+        if (testIntervals) {
             return switch (attempt) {
-                case 1 -> 5;
-                case 2 -> 10;
-                case 3 -> 15;
-                case 4 -> 20;
-                default -> 0;
-            };
-        } else {
-            // Production intervals: 1m, 5m, 30m, 2h
-            return switch (attempt) {
-                case 1 -> 60;
-                case 2 -> 300;
-                case 3 -> 1800;
-                case 4 -> 7200;
-                default -> 0;
+                case 1 -> 0;
+                case 2 -> 5;
+                case 3 -> 10;
+                case 4 -> 15;
+                default -> 20;
             };
         }
+        return switch (attempt) {
+            case 1 -> 0;
+            case 2 -> 60;
+            case 3 -> 300;
+            case 4 -> 1800;
+            default -> 7200;
+        };
     }
 
-    private String generateHmac(String data, String secret) throws Exception {
-        Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
-        SecretKeySpec secret_key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        sha256_HMAC.init(secret_key);
-        byte[] rawHmac = sha256_HMAC.doFinal(data.getBytes(StandardCharsets.UTF_8));
-        
-        // Convert to Hex
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : rawHmac) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
+    private void markFailed(WebhookLog logEntity, int attempts, String message) {
+        logEntity.setStatus("failed");
+        logEntity.setAttempts(attempts);
+        logEntity.setResponseBody(message);
+        webhookLogRepository.save(logEntity);
+    }
+
+    private String computeHmac(String payload, String secret) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] raw = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder();
+        for (byte b : raw) {
+            sb.append(String.format("%02x", b));
         }
-        return hexString.toString();
+        return sb.toString();
     }
 }
